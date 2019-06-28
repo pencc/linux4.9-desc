@@ -959,6 +959,7 @@ static void free_init_pages(char *what, unsigned long begin, unsigned long end)
 	pr_info("Freeing %s: %ldk freed\n", what, (end - begin) >> 10);
 }
 
+// 释放__init宏标记的函数内存节区(.init.text)，优化内存使用
 void free_initmem(void)
 {
 	const unsigned long text_delta = MEM_SV_START - PAGE_OFFSET;

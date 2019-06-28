@@ -2265,6 +2265,7 @@ static void __netif_reschedule(struct Qdisc *q)
 	local_irq_restore(flags);
 }
 
+// 为了处理该设备队列锁被取走，导致dev_queue_xmit无法传输的问题
 void __netif_schedule(struct Qdisc *q)
 {
 	if (!test_and_set_bit(__QDISC_STATE_SCHED, &q->state))
@@ -5152,6 +5153,7 @@ static int napi_poll(struct napi_struct *n, struct list_head *repoll)
 	 */
 	work = 0;
 	if (test_bit(NAPI_STATE_SCHED, &n->state)) {
+		// 调用设备驱动中的poll发送包，比如e100.c中的e100_poll
 		work = n->poll(n, weight);
 		trace_napi_poll(n, work, weight);
 	}
@@ -5167,6 +5169,7 @@ static int napi_poll(struct napi_struct *n, struct list_head *repoll)
 	 * move the instance around on the list at-will.
 	 */
 	if (unlikely(napi_disable_pending(n))) {
+		// 停止napi，这里很少有驱动会设置NAPI_STATE_DISABLE
 		napi_complete(n);
 		goto out_unlock;
 	}
@@ -5187,6 +5190,7 @@ static int napi_poll(struct napi_struct *n, struct list_head *repoll)
 		goto out_unlock;
 	}
 
+	// 将该设备的poll_list重新放入repoll链表中
 	list_add_tail(&n->poll_list, repoll);
 
 out_unlock:
@@ -5234,6 +5238,7 @@ static __latent_entropy void net_rx_action(struct softirq_action *h)
 	local_irq_disable();
 
 	list_splice_tail_init(&sd->poll_list, &list);
+	// 将repoll加入到list末尾，repoll是遍历过的napi_poll中保存的设备的poll_list
 	list_splice_tail(&repoll, &list);
 	list_splice(&list, &sd->poll_list);
 	if (!list_empty(&sd->poll_list))

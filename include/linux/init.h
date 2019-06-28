@@ -225,6 +225,7 @@ struct obs_kernel_param {
 		__attribute__((aligned((sizeof(long)))))		\
 		= { __setup_str_##unique_id, fn, early }
 
+// 命令行处理，处理启动命令行,如：__setup("root=", xxx)可以解析bootargs = "root=/dev/mmcblk0p2。。"
 #define __setup(str, fn)						\
 	__setup_param(str, fn, fn, 0)
 
