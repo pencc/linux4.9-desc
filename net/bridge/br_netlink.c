@@ -1396,10 +1396,13 @@ struct rtnl_link_ops br_link_ops __read_mostly = {
 int __init br_netlink_init(void)
 {
 	int err;
-
+	// 注册了3各rtnetlink的消息类型
 	br_mdb_init();
+	// Register rtnl_af_ops (address family operations) with rtnetlink.
 	rtnl_af_register(&br_af_ops);
 
+	// Register rtnl_link_ops with rtnetlink.
+	// This includes br_dev_setup() which is used to setup a new bridge device.
 	err = rtnl_link_register(&br_link_ops);
 	if (err)
 		goto out_af;

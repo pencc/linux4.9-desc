@@ -191,36 +191,45 @@ static int __init br_init(void)
 
 	BUILD_BUG_ON(sizeof(struct br_input_skb_cb) > FIELD_SIZEOF(struct sk_buff, cb));
 
+	// stp相关初始化
 	err = stp_proto_register(&br_stp_proto);
 	if (err < 0) {
 		pr_err("bridge: can't register sap for STP\n");
 		return err;
 	}
 
+	// 转发数据库(CAM表)初始化，在内存中建立一块slab cache，以存放net_bridge_fdb_entry
 	err = br_fdb_init();
 	if (err)
 		goto err_out;
 
+	// 为bridge模块注册网络命名空间，init为空所以未注册
 	err = register_pernet_subsys(&br_net_ops);
 	if (err)
 		goto err_out1;
 
+	// 设置fake_dst_ops的percpu_counter为0？
 	err = br_nf_core_init();
 	if (err)
 		goto err_out2;
 
+	// 注册br_device_event()到内核通知链，会传递所有netdev的通知，如(link up/down)
 	err = register_netdevice_notifier(&br_device_notifier);
 	if (err)
 		goto err_out3;
 
+	// 注册br_switchdev_event()，从Rocker(虚拟设备模拟交换机)中获取通知，
+	// NETDEV_SWITCH_FDB_ADD和NETDEV_SWITCH_FDB_DEL事件会被通知
 	err = register_switchdev_notifier(&br_switchdev_notifier);
 	if (err)
 		goto err_out4;
 
+	// 网桥链接初始化
 	err = br_netlink_init();
 	if (err)
 		goto err_out5;
 
+	// 设置处理ioctl命令的函数
 	brioctl_set(br_ioctl_deviceless_stub);
 
 #if IS_ENABLED(CONFIG_ATM_LANE)

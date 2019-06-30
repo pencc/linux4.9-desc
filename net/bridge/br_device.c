@@ -61,8 +61,10 @@ netdev_tx_t br_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 	if (!br_allowed_ingress(br, br_vlan_group_rcu(br), skb, &vid))
 		goto out;
 
+	// 检查数据包是否为广播包
 	if (is_broadcast_ether_addr(dest)) {
 		br_flood(br, skb, BR_PKT_BROADCAST, false, true);
+	// 检查是否为组播包
 	} else if (is_multicast_ether_addr(dest)) {
 		if (unlikely(netpoll_tx_running(dev))) {
 			br_flood(br, skb, BR_PKT_MULTICAST, false, true);

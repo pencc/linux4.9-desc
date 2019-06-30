@@ -140,6 +140,7 @@ void br_manage_promisc(struct net_bridge *br)
 	if ((br->dev->flags & IFF_PROMISC) || !br_vlan_enabled(br))
 		set_all = true;
 
+	// 设置所有的桥接端口为混杂模式(如eth0、eth1等)
 	list_for_each_entry(p, &br->port_list, list) {
 		if (set_all) {
 			br_port_set_promisc(p);
@@ -535,6 +536,7 @@ int br_add_if(struct net_bridge *br, struct net_device *dev)
 	if (err)
 		goto err3;
 
+	// 注册收帧函数
 	err = netdev_rx_handler_register(dev, br_handle_frame, p);
 	if (err)
 		goto err4;
@@ -553,6 +555,7 @@ int br_add_if(struct net_bridge *br, struct net_device *dev)
 
 	list_add_rcu(&p->list, &br->port_list);
 
+	// 更新网桥上的端口数，如果有更新，再将所有端口上的从设备设置为的混杂模式
 	nbp_update_port_count(br);
 
 	netdev_update_features(br->dev);
