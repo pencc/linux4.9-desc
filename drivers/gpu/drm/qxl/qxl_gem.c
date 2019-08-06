@@ -92,6 +92,7 @@ int qxl_gem_object_create_with_handle(struct qxl_device *qdev,
 				  &gobj);
 	if (r)
 		return -ENOMEM;
+	// 创建handle，并使handle拿到前面创建的gem对象的引用
 	r = drm_gem_handle_create(file_priv, gobj, handle);
 	if (r)
 		return r;

@@ -1036,6 +1036,11 @@ static int qdev_output_init(struct drm_device *dev, int num_output)
 	return 0;
 }
 
+// 这里是drmModeAddFB调进来的，前面会通过调用qxl_alloc_surf_ioctl
+// 创建好新的handle，这里的mode_cmd->handles[0]实际上就是libdrm
+// 的函数drmModeAddFB中传入的bo_handle，也就是应用层之前通过
+// 调用drmmode_xf86crtc_resize->create_primary->ioctl->qxl_alloc_surf_ioctl
+// 创建的handle
 static struct drm_framebuffer *
 qxl_user_framebuffer_create(struct drm_device *dev,
 			    struct drm_file *file_priv,

@@ -59,6 +59,7 @@ module_param_named(num_heads, qxl_num_crtc, int, 0400);
 static struct drm_driver qxl_driver;
 static struct pci_driver qxl_pci_driver;
 
+// pciidlist匹配到qxl硬件后的回调函数
 static int
 qxl_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
@@ -67,6 +68,9 @@ qxl_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 			  " use xf86-video-qxl in user mode");
 		return -EINVAL; /* TODO: ENODEV ? */
 	}
+
+	// 这里将qxl_driver赋给了pci device结构体的参数pdev->driver，也就是将驱动放入PCI设备中由drm统一管理
+	// qxl_driver里面包含了大量的驱动层操作，比如qxl_mmap、qxl_ioctls
 	return drm_get_pci_dev(pdev, ent, &qxl_driver);
 }
 
@@ -270,6 +274,7 @@ static struct drm_driver qxl_driver = {
 	.patchlevel = 0,
 };
 
+// 模块入口
 static int __init qxl_init(void)
 {
 	if (vgacon_text_force() && qxl_modeset == -1)
@@ -278,6 +283,14 @@ static int __init qxl_init(void)
 	if (qxl_modeset == 0)
 		return -EINVAL;
 	qxl_driver.num_ioctls = qxl_max_ioctls;
+	// 这里将驱动注册到drm子模块，匹配的设备主要是qxl_pci_driver->.id_table，
+	// 匹配的设备列表如下，主要匹配前两个参数VID(0x1b36)和DID(0x100)，Vendor ID和Device ID
+	/**
+	 * 	{ 0x1b36, 0x100, PCI_ANY_ID, PCI_ANY_ID, PCI_CLASS_DISPLAY_VGA << 8, 0xffff00, 0 },
+	 *	{ 0x1b36, 0x100, PCI_ANY_ID, PCI_ANY_ID, PCI_CLASS_DISPLAY_OTHER << 8, 0xffff00, 0 },
+	 *	{ 0, 0, 0 },
+	 */
+	// 匹配成功后默认回调 qxl_pci_probe
 	return drm_pci_init(&qxl_driver, &qxl_pci_driver);
 }
 

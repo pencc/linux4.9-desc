@@ -301,6 +301,8 @@ int qxl_driver_unload(struct drm_device *dev)
 	return 0;
 }
 
+// KMS(Kernel Mode Setting)主要负责控制流，即针对外置LCD以及指定的显示模式设置，
+// 将生成好了的frame数据信息送到响应display port上（VGA、HDMI等）
 int qxl_driver_load(struct drm_device *dev, unsigned long flags)
 {
 	struct qxl_device *qdev;

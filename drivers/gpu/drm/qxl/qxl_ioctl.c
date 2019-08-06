@@ -417,10 +417,12 @@ static int qxl_alloc_surf_ioctl(struct drm_device *dev, void *data,
 			  __func__, ret);
 		return -ENOMEM;
 	} else
-		param->handle = handle;
+		param->handle = handle;		// 重新设置qxl surf对handle的引用
 	return ret;
 }
 
+// 在qxl_drm.h中有相关宏的定义，这里的DRM_IOCTL_DEF_DRV函数将第一个参数
+// 通过(DRM_IOCTL_##ioctl)宏展开，所以应用态调用ioctl参数类似DRM_IOCTL_QXL_ALLOC_SURF
 const struct drm_ioctl_desc qxl_ioctls[] = {
 	DRM_IOCTL_DEF_DRV(QXL_ALLOC, qxl_alloc_ioctl, DRM_AUTH),
 
