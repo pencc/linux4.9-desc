@@ -780,6 +780,9 @@ static int qdev_crtc_init(struct drm_device *dev, int crtc_id)
 	if (!qxl_crtc)
 		return -ENOMEM;
 
+	// 这里进行了crtc相关的初始化，通过drm_crtc_init_with_planes->(crtc->funcs = funcs)
+	// 来将qxl_crtc_funcs赋值给了drm持有的crtc，来将funcs交给drm管理，后续应用层就能
+	// 通过比如qxl_crtc_page_flip来实现双buffer
 	drm_crtc_init(dev, &qxl_crtc->base, &qxl_crtc_funcs);
 	qxl_crtc->index = crtc_id;
 	drm_crtc_helper_add(&qxl_crtc->base, &qxl_crtc_helper_funcs);
