@@ -110,6 +110,7 @@ int qxl_ring_push(struct qxl_ring *ring,
 	uint8_t *elt;
 	int idx, ret;
 	unsigned long flags;
+	// 这里会保存本地(当前cpu)所有中断状态，unlock时会恢复，并且会直接关闭中断，防止死锁
 	spin_lock_irqsave(&ring->lock, flags);
 	if (header->prod - header->cons == header->num_items) {
 		header->notify_on_cons = header->cons + 1;
@@ -134,8 +135,11 @@ int qxl_ring_push(struct qxl_ring *ring,
 	}
 
 	idx = header->prod & (ring->n_elements - 1);
+	// 这里就能看出vram的ring区域中的新分配的：绘图命令节点基地址 =  节点个数 x 节点大小
+	// 这里的ring->element_size再qxl_ring_create中就确定了，也就是说每个绘图命令大小都是固定的
 	elt = ring->ring->elements + idx * ring->element_size;
 
+	// 图形命令和图像的组合结构体实际上就存放在new_elt中，这里将它拷贝到vram的ring内存区中
 	memcpy((void *)elt, new_elt, ring->element_size);
 
 	header->prod++;

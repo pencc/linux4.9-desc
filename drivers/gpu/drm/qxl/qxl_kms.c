@@ -133,6 +133,20 @@ static int qxl_device_init(struct qxl_device *qdev,
 	mutex_init(&qdev->surf_evict_mutex);
 	INIT_LIST_HEAD(&qdev->gem.objects);
 
+	/**
+	 * qxl_dev.h中有对PCI BAR(Base Address Register)的定义
+	 * enum {
+			QXL_RAM_RANGE_INDEX,
+			QXL_VRAM_RANGE_INDEX,
+			QXL_ROM_RANGE_INDEX,
+			QXL_VRAM64_RANGE_INDEX
+		};
+	 *  qemu中的qxl设备注册pci bar是通过pci_register_bar(&qxl->pci, QXL_IO_RANGE_INDEX, 。。。)
+	 *  所以这里通过pci resource获取的rom等的寄存器基地址顺序和range index中定义的顺序相同，
+	 *  这里的vram_base在qemu中的定义的是QXL_RAM_RANGE_INDEX <--> qxl->vga.vram，
+	 *  而QXL_VRAM_RANGE_INDEX <--> qxl->vram32_bar，当qxl->vram32_size < qxl->vram_size时，
+	 *  则会定义QXL_VRAM64_RANGE_INDEX <-->qxl->vram_bar
+	 */
 	qdev->rom_base = pci_resource_start(pdev, 2);
 	qdev->rom_size = pci_resource_len(pdev, 2);
 	qdev->vram_base = pci_resource_start(pdev, 0);
@@ -170,6 +184,7 @@ static int qxl_device_init(struct qxl_device *qdev,
 		 (int)qdev->surfaceram_size / 1024,
 		 (sb == 4) ? "64bit" : "32bit");
 
+	// 这里将pci设备rom的IO地址空间映射到虚拟地址空间，便于直接读写内存访问。
 	qdev->rom = ioremap(qdev->rom_base, qdev->rom_size);
 	if (!qdev->rom) {
 		pr_err("Unable to ioremap ROM\n");
@@ -188,6 +203,9 @@ static int qxl_device_init(struct qxl_device *qdev,
 				   qdev->rom->ram_header_offset,
 				   sizeof(*qdev->ram_header));
 
+	// qxl的command_ring直接就在  vram的基地址 + ram header偏移地址 + cmd_ring_hdr偏移地址  处
+	// 这里虽然叫ring，但从代码中看起来并没有环形队列的意思，仅仅是数组+结构体的方式保存再vram中
+	// 并没有形成环
 	qdev->command_ring = qxl_ring_create(&(qdev->ram_header->cmd_ring_hdr),
 					     sizeof(struct qxl_command),
 					     QXL_COMMAND_RING_SIZE,
@@ -314,6 +332,7 @@ int qxl_driver_load(struct drm_device *dev, unsigned long flags)
 
 	dev->dev_private = qdev;
 
+	// 这里主要是初始化了设备的pci相关资源，创建了qxl ring队列
 	r = qxl_device_init(qdev, dev, dev->pdev, flags);
 	if (r)
 		goto out;
