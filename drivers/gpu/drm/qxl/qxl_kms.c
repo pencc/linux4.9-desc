@@ -109,6 +109,7 @@ void qxl_reinit_memslots(struct qxl_device *qdev)
 	setup_hw_slot(qdev, qdev->surfaces_mem_slot, &qdev->mem_slots[qdev->surfaces_mem_slot]);
 }
 
+// 这里是从release ring中获取并释放图形命令资源的工作线程，在INIT_WORK中注册，并通过schedule_work被回调。
 static void qxl_gc_work(struct work_struct *work)
 {
 	struct qxl_device *qdev = container_of(work, struct qxl_device, gc_work);
@@ -203,28 +204,31 @@ static int qxl_device_init(struct qxl_device *qdev,
 				   qdev->rom->ram_header_offset,
 				   sizeof(*qdev->ram_header));
 
-	// qxl的command_ring直接就在  vram的基地址 + ram header偏移地址 + cmd_ring_hdr偏移地址  处
-	// 这里虽然叫ring，但从代码中看起来并没有环形队列的意思，仅仅是数组+结构体的方式保存再vram中
-	// 并没有形成环
+	// qxl的command_ring直接就在  (vram的基地址 + ram header偏移地址 + cmd_ring_hdr偏移地址 ) 处
+	// 环形队列分配了一个固定的长度，当队列head、tail下标大于队列长度会自动回到队列头，数据用结构体的方式存储在vram中
+	// ring队列尾部插入头部取出，数据以及头尾游标均存放在vram中
 	qdev->command_ring = qxl_ring_create(&(qdev->ram_header->cmd_ring_hdr),
 					     sizeof(struct qxl_command),
-					     QXL_COMMAND_RING_SIZE,
+					     QXL_COMMAND_RING_SIZE,  // 这里创建的是绘图命令队列
 					     qdev->io_base + QXL_IO_NOTIFY_CMD,
 					     false,
 					     &qdev->display_event);
 
+	// cursor_ring_hdr等这些头地址也是qemu在pci的bar中设置好的
 	qdev->cursor_ring = qxl_ring_create(
 				&(qdev->ram_header->cursor_ring_hdr),
 				sizeof(struct qxl_command),
-				QXL_CURSOR_RING_SIZE,
+				QXL_CURSOR_RING_SIZE,  // 这里创建的是鼠标队列
 				qdev->io_base + QXL_IO_NOTIFY_CMD,
 				false,
 				&qdev->cursor_event);
 
+ 	// 这里创建的是释放命令队列，当一个绘图命令不再被libspice需要时，qemu端会把它push到设备的
+	// 释放命令队列中，qxl驱动使用这个队列来释放命令资源。也就是说只有这里是驱动主动pull资源
 	qdev->release_ring = qxl_ring_create(
 				&(qdev->ram_header->release_ring_hdr),
 				sizeof(uint64_t),
-				QXL_RELEASE_RING_SIZE, 0, true,
+				QXL_RELEASE_RING_SIZE, 0, true,	
 				NULL);
 
 	/* TODO - slot initialization should happen on reset. where is our

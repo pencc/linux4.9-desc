@@ -103,6 +103,8 @@ int qxl_check_idle(struct qxl_ring *ring)
 	return ret;
 }
 
+// 将数据插入到ring的循环队列末尾，qemu端spice会通过poll+wait_cond的方式来循环获取队列命令
+// spice端当poll达到一定次数后会通过wait_cond来sleep释放cpu，有一种类似于napi的感觉 ; )
 int qxl_ring_push(struct qxl_ring *ring,
 		  const void *new_elt, bool interruptible)
 {
@@ -112,15 +114,19 @@ int qxl_ring_push(struct qxl_ring *ring,
 	unsigned long flags;
 	// 这里会保存本地(当前cpu)所有中断状态，unlock时会恢复，并且会直接关闭中断，防止死锁
 	spin_lock_irqsave(&ring->lock, flags);
+	// 这里是ring队列满后再插入ring命令的情况，这里会以睡眠、轮循的方式等待队列中出现空位
 	if (header->prod - header->cons == header->num_items) {
+		// 这里设置了唤醒等待的条件为qemu端处理了一个ring命令
 		header->notify_on_cons = header->cons + 1;
-		mb();
+		mb(); // 这里防止编译器优化，这里必须等待前面对vram的操作完成，后面的check header才有意义
 		spin_unlock_irqrestore(&ring->lock, flags);
 		if (!drm_can_sleep()) {
+			// 轮训方式等待qemu处理ring数据
 			while (!qxl_check_header(ring))
 				udelay(1);
 		} else {
 			if (interruptible) {
+				// 睡眠方式等待qemu处理ring命令
 				ret = wait_event_interruptible(*ring->push_event,
 							       qxl_check_header(ring));
 				if (ret)
@@ -134,6 +140,8 @@ int qxl_ring_push(struct qxl_ring *ring,
 		spin_lock_irqsave(&ring->lock, flags);
 	}
 
+	// header->prod存放着环形队列的末尾位置
+	// 这里就能看出cmd ring确实是环形区域，因为其一旦大于n_elements就会回到起始位置
 	idx = header->prod & (ring->n_elements - 1);
 	// 这里就能看出vram的ring区域中的新分配的：绘图命令节点基地址 =  节点个数 x 节点大小
 	// 这里的ring->element_size再qxl_ring_create中就确定了，也就是说每个绘图命令大小都是固定的
@@ -144,15 +152,17 @@ int qxl_ring_push(struct qxl_ring *ring,
 
 	header->prod++;
 
-	mb();
+	mb(); // 这里防止编译器优化，这里必须等待前面的操作完成，后面的判断和写入才有意义
 
+	// 这里是指当队列尾达到notify_on_prod设置的水位时，写入prod_notify来提醒qemu，写入会直接触发qemu的ioport_write
 	if (header->prod == header->notify_on_prod)
-		outb(0, ring->prod_notify);
+		outb(0, ring->prod_notify); // 这里的prod_notify是io_base + QXL_IO_NOTIFY_CMD，也就相当于向这个地址写入0值
 
 	spin_unlock_irqrestore(&ring->lock, flags);
 	return 0;
 }
 
+// 从ring循环队列头弹出一个数据
 static bool qxl_ring_pop(struct qxl_ring *ring,
 			 void *element)
 {
@@ -161,12 +171,16 @@ static bool qxl_ring_pop(struct qxl_ring *ring,
 	int idx;
 	unsigned long flags;
 	spin_lock_irqsave(&ring->lock, flags);
+	// head==tail的时候是队列为空的时候，这时无法弹出数据，因此返回false
 	if (header->cons == header->prod) {
+		// 这里设置了唤醒等待的条件为qemu端插入了一个ring命令
 		header->notify_on_prod = header->cons + 1;
 		spin_unlock_irqrestore(&ring->lock, flags);
 		return false;
 	}
 
+	// header->cons存放这队列起始位置
+	// 队列头也是大于初始分配的n_elements就回到起始位置
 	idx = header->cons & (ring->n_elements - 1);
 	ring_elt = ring->ring->elements + idx * ring->element_size;
 
@@ -204,6 +218,10 @@ qxl_push_cursor_ring_release(struct qxl_device *qdev, struct qxl_release *releas
 	return qxl_ring_push(qdev->cursor_ring, &cmd, interruptible);
 }
 
+// 这里的schedule_work会触发qxl kms中注册的INIT_WORK(&qdev->gc_work, qxl_gc_work);
+// 会通过回调qxl_gc_work，来从release ring中获取图形命令，并释放资源占用
+// *这里的实际触发是在qxl_irq_handler中通过qemu触发了irq发送QXL_INTERRUPT_DISPLAY的时候，
+// qemu会在push不用的绘图指令到release ring队列后强行触发irq，触发驱动中的垃圾回收工作。
 bool qxl_queue_garbage_collect(struct qxl_device *qdev, bool flush)
 {
 	if (!qxl_check_idle(qdev->release_ring)) {
@@ -215,6 +233,7 @@ bool qxl_queue_garbage_collect(struct qxl_device *qdev, bool flush)
 	return false;
 }
 
+// 通过release ring执行垃圾回收
 int qxl_garbage_collect(struct qxl_device *qdev)
 {
 	struct qxl_release *release;
@@ -222,6 +241,7 @@ int qxl_garbage_collect(struct qxl_device *qdev)
 	int i = 0;
 	union qxl_release_info *info;
 
+	// 这里有数据的话就会挨个弹出所有数据并进行释放处理
 	while (qxl_ring_pop(qdev->release_ring, &id)) {
 		QXL_INFO(qdev, "popped %lld\n", id);
 		while (id) {

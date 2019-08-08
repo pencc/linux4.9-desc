@@ -160,6 +160,7 @@ enum {
 };
 
 /* qxl-1 compat: append only */
+//  这些是qxl和qemu通信指令，其表现为对enum代表的相对io_base的寄存器偏移地址的写入，默认写0表示触发
 enum {
 	QXL_IO_NOTIFY_CMD,
 	QXL_IO_NOTIFY_CURSOR,
@@ -185,7 +186,7 @@ enum {
 	QXL_IO_DESTROY_PRIMARY_ASYNC,
 	QXL_IO_DESTROY_SURFACE_ASYNC,
 	QXL_IO_DESTROY_ALL_SURFACES_ASYNC,
-	QXL_IO_FLUSH_SURFACES_ASYNC,
+	QXL_IO_FLUSH_SURFACES_ASYNC,		// 为了减少vmexits，用来刷新所有的surface (相当于 UPDATE_AREA x NUM_ACTIVE_SURFACES )
 	QXL_IO_FLUSH_RELEASE,
 	/* appended for qxl-4 */
 	QXL_IO_MONITORS_CONFIG_ASYNC,
