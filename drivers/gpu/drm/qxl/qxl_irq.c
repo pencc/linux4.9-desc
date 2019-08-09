@@ -41,6 +41,7 @@ irqreturn_t qxl_irq_handler(int irq, void *arg)
 	if (pending & QXL_INTERRUPT_DISPLAY) {
 		atomic_inc(&qdev->irq_received_display);
 		wake_up_all(&qdev->display_event);
+		// qemu通过中断触发qemu irq，进行release ring的资源回收
 		qxl_queue_garbage_collect(qdev, false);
 	}
 	if (pending & QXL_INTERRUPT_CURSOR) {
@@ -61,6 +62,8 @@ irqreturn_t qxl_irq_handler(int irq, void *arg)
 	}
 	if (pending & QXL_INTERRUPT_CLIENT_MONITORS_CONFIG) {
 		qxl_io_log(qdev, "QXL_INTERRUPT_CLIENT_MONITORS_CONFIG\n");
+		// 屏幕配置改变，比如spice增加了一个显示通道(双屏)，这时spice会通过qemu
+		// 触发irq信号来在guest侧配置双屏
 		schedule_work(&qdev->client_monitors_config_work);
 	}
 	qdev->ram_header->int_mask = QXL_INTERRUPT_MASK;

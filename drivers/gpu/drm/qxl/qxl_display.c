@@ -64,6 +64,7 @@ static int qxl_display_copy_rom_client_monitors_config(struct qxl_device *qdev)
 	uint32_t crc;
 
 	num_monitors = qdev->rom->client_monitors_config.count;
+	// 这里对配置数据进行校验
 	crc = crc32(0, (const uint8_t *)&qdev->rom->client_monitors_config,
 		  sizeof(qdev->rom->client_monitors_config));
 	if (crc != qdev->rom->client_monitors_config_crc) {
@@ -84,15 +85,18 @@ static int qxl_display_copy_rom_client_monitors_config(struct qxl_device *qdev)
 	qdev->client_monitors_config->max_allowed =
 				qdev->monitors_config->max_allowed;
 	for (i = 0 ; i < qdev->client_monitors_config->count ; ++i) {
+		// 从rom中读取屏幕长宽信息
 		struct qxl_urect *c_rect =
 			&qdev->rom->client_monitors_config.heads[i];
 		struct qxl_head *client_head =
 			&qdev->client_monitors_config->heads[i];
+		// 多屏情况下，由于屏物理上是独立的，但绘图区域是拼接起来的所以这里qemu传入的 screen2->left = screen1->left + screen1->width
 		client_head->x = c_rect->left;
 		client_head->y = c_rect->top;
 		client_head->width = c_rect->right - c_rect->left;
 		client_head->height = c_rect->bottom - c_rect->top;
 		client_head->surface_id = 0;
+		// 这里的id指的screen id
 		client_head->id = i;
 		client_head->flags = 0;
 		DRM_DEBUG_KMS("read %dx%d+%d+%d\n", client_head->width, client_head->height,
@@ -120,16 +124,20 @@ static void qxl_update_offset_props(struct qxl_device *qdev)
 	}
 }
 
+// 通过irq触发，说明屏出现了配置改变，比如添加了一块屏(双屏)
 void qxl_display_read_client_monitors_config(struct qxl_device *qdev)
 {
 
 	struct drm_device *dev = qdev->ddev;
+	// 这里直接从rom中拷贝新的屏配置信息到内存中
 	while (qxl_display_copy_rom_client_monitors_config(qdev)) {
 		qxl_io_log(qdev, "failed crc check for client_monitors_config,"
 				 " retrying\n");
 	}
 
 	drm_modeset_lock_all(dev);
+	// 这个函数设置了drm_connector，drm的组件架构：connector-->encoder-->crtc-->framebuffer
+	// 其中connector直接链接了物理显示器，直接输出显示信号，但是这在qxl中意味着什么？
 	qxl_update_offset_props(qdev);
 	drm_modeset_unlock_all(dev);
 	if (!drm_helper_hpd_irq_event(qdev->ddev)) {
