@@ -104,7 +104,7 @@ static int qxl_display_copy_rom_client_monitors_config(struct qxl_device *qdev)
 	}
 	return 0;
 }
-
+// 这里更新了两个屏的起始点坐标偏移值
 static void qxl_update_offset_props(struct qxl_device *qdev)
 {
 	struct drm_device *dev = qdev->ddev;
@@ -116,7 +116,7 @@ static void qxl_update_offset_props(struct qxl_device *qdev)
 		output = drm_connector_to_qxl_output(connector);
 
 		head = &qdev->client_monitors_config->heads[output->index];
-
+		// 这里设置了connector起始点的的x、y值，也就是说第二个屏的x=1024，y=0
 		drm_object_property_set_value(&connector->base,
 			dev->mode_config.suggested_x_property, head->x);
 		drm_object_property_set_value(&connector->base,
@@ -137,7 +137,7 @@ void qxl_display_read_client_monitors_config(struct qxl_device *qdev)
 
 	drm_modeset_lock_all(dev);
 	// 这个函数设置了drm_connector，drm的组件架构：connector-->encoder-->crtc-->framebuffer
-	// 其中connector直接链接了物理显示器，直接输出显示信号，但是这在qxl中意味着什么？
+	// 其中connector直接链接了物理显示器，输出显示信号
 	qxl_update_offset_props(qdev);
 	drm_modeset_unlock_all(dev);
 	if (!drm_helper_hpd_irq_event(qdev->ddev)) {
