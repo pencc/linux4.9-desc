@@ -63,7 +63,7 @@ static int qxl_map_ioctl(struct drm_device *dev, void *data,
 {
 	struct qxl_device *qdev = dev->dev_private;
 	struct drm_qxl_map *qxl_map = data;
-
+	// 这里的qxl_map->offset就是应用层后面mmap的qxl->drm_fd的偏移值
 	return qxl_mode_dumb_mmap(file_priv, qdev->ddev, qxl_map->handle,
 				  &qxl_map->offset);
 }
@@ -407,6 +407,7 @@ static int qxl_alloc_surf_ioctl(struct drm_device *dev, void *data,
 	surf.stride = param->stride;
 	surf.data = 0;
 
+	// 配置双屏后从这里开始分配framebuffer
 	ret = qxl_gem_object_create_with_handle(qdev, file,
 						QXL_GEM_DOMAIN_SURFACE,
 						size,
