@@ -615,6 +615,9 @@ static bool qxl_crtc_mode_fixup(struct drm_crtc *crtc,
 	return true;
 }
 
+// xrandr设置分辨率会到这里来，之后会直接通过硬件io向qemu发送QXL_IO_MONITORS_CONFIG_ASYNC请求
+// spice端会通过ioport_write进入到qxl_spice_monitors_config_async，spice最后会在handle_dev_monitors_config_async中
+// 进行真正的处理
 void
 qxl_send_monitors_config(struct qxl_device *qdev)
 {
